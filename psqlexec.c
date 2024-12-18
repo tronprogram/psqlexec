@@ -27,6 +27,7 @@ int main(int argc, char *argv[])
     char full_path[512];
     int result = 0;
     char continuar[1];
+    char error_buffer[512];
     if (argc == 4)
     {
         printf(GREEN "Parametros correctos! Ejecutando...\n" RESET);
@@ -73,38 +74,56 @@ int main(int argc, char *argv[])
 
             if (S_ISREG(file_stat.st_mode) && (strstr(entry->d_name, ".sql")) != NULL)
             {
+                // sprintf stores formatted values a-la-printf on a string. it takes 3 values: first value takes the char array that will store the string, the second takes the size of the string, and the third is the actual string that will get stored.
                 snprintf(textbuffer, sizeof(textbuffer),
-                         "psql --dbname=postgresql://%s:%s@localhost:5432/%s -f \"%s\"",
+                         "psql --dbname=postgresql://%s:%s@localhost:5432/%s -f \"%s\" 2>&1 1>nul",
                          username, passwd, db, entry->d_name);
-                result = system(textbuffer);
-                if (result == 0)
+                // popen opens a pipe to or from a command. It returns a pointer to a stream that can be used to either read from or write to the pipe.
+                // what is a pipe, you may ask? well, a pipe is like a form of redirection that is used in Linux and other Unix-like operating systems to send the output of one command/program/process to another command/program/process for further processing. (also works for winblows ;) )
+                // to do all of the things we are going to pull off, first we redirect psql's stderr to our stdout, so we can read it and print it out.
+                FILE *pipe = popen(textbuffer, "r");
+                // you may ask, where's pipe pointing to? well, it's pointing to the output of the command we just ran.
+                // popen gets 2 parameters: the string command we're storing in textbuffer, and the way we're opening the stream, in this case, read only.
+                // if the pipe is null, it means that the command blew up, so we print an error message and return an exit failure.
+                if (!pipe)
+                {
+                    perror(RED "Error al abrir el pipe." RESET);
+                    return EXIT_FAILURE;
+                }
+                bool success = true;
+                // if the program gets something from psql's stderr, it'll halt the program and print the error message.
+                while (fgets(error_buffer, sizeof(error_buffer), pipe) != NULL)
+                {
+                    printf(RED "Error: %s" RESET, error_buffer);
+                    success = false;
+                }
+                result = pclose(pipe);
+                if (success && result == 0)
                 {
                     printf(GREEN "%s procesado correctamente.\n" RESET, entry->d_name);
                     i++;
                 }
                 else
                 {
-                    printf("%s no se pudo procesar...", entry->d_name);
-                    // TODO: colocar condición para elegir si continuar o cancelar
-                    Sleep(1);
-                    while (continuar[1] != 's' || continuar[1] != 'n')
+                    printf("%s no se pudo procesar...\n", entry->d_name);
+                    while (continuar[0] != 's' && continuar[0] != 'n')
                     {
                         printf("continuar ejecutando? (S/N): \n");
-                        scanf("%s", &continuar[1]);
-                        continuar[1] = tolower(continuar[1]);
-                        if (continuar[1] == 's')
+                        scanf(" %c", &continuar[0]);
+                        continuar[0] = tolower(continuar[0]);
+                        if (continuar[0] == 's')
                         {
                             printf("bajo su propia discreción.\n");
                             break;
                         }
-                        else if (continuar[1] == 'n')
+                        else if (continuar[0] == 'n')
                         {
                             (i > 1) ? printf("%d archivos procesados antes de llegar al error.", i) : printf("%d archivo procesado antes de llegar al error.", i);
                             return 0;
                         }
                         else
                         {
-                            printf("elige una opción válida");
+                            printf("elige una opción válida\n");
                         }
                     }
                 }
