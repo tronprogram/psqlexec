@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
                         }
                         else if (continuar[1] == 'n')
                         {
-                            printf("gallina");
+                            (i > 1) ? printf("%d archivos procesados antes de llegar al error.", i) : printf("%d archivo procesado antes de llegar al error.", i);
                             return 0;
                         }
                         else
